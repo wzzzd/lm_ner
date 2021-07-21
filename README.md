@@ -20,7 +20,7 @@
 ```
 
 # Datasets
-* CNER：
+* **CNER**
     * 来自：https://github.com/lonePatient/BERT-NER-Pytorch
     * 关于简历的的数据。
     * 数据分为8类标签类别，分别为：
@@ -34,7 +34,7 @@
         学历（EDU）
         职称（TITLE）
     ```
-* CLUENER：（待补充）
+* **CLUENER（待补充）**
     * 来自：https://github.com/CLUEbenchmark/CLUENER2020
     * 数据来源于Sina News RSS.
     * 数据分为10个标签类别，分别为: 
@@ -51,7 +51,7 @@
         景点（scene） 
     ```
 
-* 加入自己的数据集
+* **加入自己的数据集**
     * 可使用本项目的处理方式，将数据集切分为3部分：train/valid/test，其中token和label之间用空格分割。
     * 在 ./dataset 目录下新建一个文件夹，并把3个数据文件放置新建文件夹下
     * 处理好数据集后，需要修改文件 arg_config.py 中的变量，英文为'en'，中文为'zh'
@@ -59,7 +59,7 @@
         self.language = 'en'
     ```
 
-* 数据集示例
+* **数据集示例**
     * 以数据集CNER为栗子，文本和标签使用空格隔开，采用以下形式存储：
     ```
         2 O
