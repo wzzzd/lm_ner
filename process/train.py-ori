@@ -1,0 +1,284 @@
+# -*- coding: UTF-8 -*-
+
+
+import os 
+import pandas as pd
+import torch
+import logging
+from torch.nn import functional as F
+from sklearn.metrics import f1_score
+from transformers import AdamW
+from transformers import BertTokenizer, BertModel, BertForSequenceClassification
+from transformers import AutoModel, AutoTokenizer
+
+from arg_config import Config
+from model.bert_crf import BertCrf
+from config.BertConfig import BertConfig
+# from DataManager import DataManager
+
+from metrics.WeightMacroF1 import WMF1
+
+
+Config = Config()
+device = torch.device(Config.device)
+
+
+def train(train_loader, test_loader, valid_loader, num_labels, tgt2index, index2tgt):
+    """
+    训练过程
+    """
+
+    # 读取模型
+    print('loading model...')
+
+    tokenizer = BertTokenizer.from_pretrained(Config.model_name)
+    # tokenizer.save_pretrained(Config.path_tokenizer)
+    model_config = BertConfig.from_pretrained(Config.model_name, num_labels=num_labels)#num_labels=len(tgt2index.keys())-1)
+    model = BertCrf.from_pretrained(Config.model_name, config=model_config)
+    # model.save_pretrained(Config.path_bert)
+
+    # tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
+    # model = AutoModel.from_pretrained(MODEL_NAME) 
+
+
+    # 配置优化器
+    optimizer = AdamW(model.parameters(), lr=Config.lr)
+    # 切换到gpu
+    model.to(device)
+    # 启动训练模式
+    model.train()
+
+    # 冻结base model的参数
+    for param in model.base_model.parameters():
+        param.requires_grad = False
+
+    print('start training..')
+    best_f1 = 0
+    for epo in range(Config.epoch):
+        i = 0
+        for bs in train_loader:
+
+            # 输入
+            input_ids = bs[0]
+            attention_mask = bs[1]
+            labels = bs[2]
+
+            # 定义loss，并训练
+            optimizer.zero_grad()   # 梯度清零
+            # print('-'*100)
+            # print(input_ids)
+            # print(labels)
+            outputs = model(input_ids, labels=labels, attention_mask=attention_mask)
+
+            # print(outputs)
+            loss = outputs[0]           # 获取每个token的logit输出结果
+            loss.backward()             
+            optimizer.step()            
+            
+            # 验证效果
+            if i % 100 == 0:
+                f1 = get_score(valid_loader, model, index2tgt, tokenizer)
+                acc = f1
+                print('current epoch: %s/%s  iter:%s/%s  loss:%.6f  valid f1:%.3f  acc:%.3f' %(epo, Config.epoch, i, bs[0].size()[0], loss.item(), f1, acc))
+                
+                # if f1 > best_f1:
+                #     save_path = os.path.join(Config.path_save_model, 'epoch_'+str(epo))
+                #     model.save_pretrained(save_path)
+                #     best_f1 = f1
+                #     print('save model success! ')
+            # 测试效果
+            if i % 500 == 0:
+                f1 = get_score(test_loader, model, index2tgt, tokenizer)
+                acc = f1
+                print('current epoch: %s/%s  iter:%s/%s  loss:%.6f  test f1:%.3f  acc:%.3f' %(epo, Config.epoch, i, bs[0].size()[0], loss.item(), f1, acc))
+            i += 1
+        
+        # 若本次迭代没有保存模型文件
+        # save_path = os.path.join(Config.path_save_model, 'epoch_'+str(epo))
+        # if not os.path.exists(save_path):
+        #     model.save_pretrained(save_path)
+        
+    print('training end..')
+
+
+# def get_score(loader, model, tgt2index, tokenizer):
+#     """
+#     计算在验证集上的准确率
+#     """
+#     # print('valid len:', len(srciqi))
+#     i = 0
+#     count = 0
+#     count_match = 0
+#     lab_groundtruth = []
+#     lab_predict = []
+#     grandtruth = {}
+#     predict = {}
+    
+#     # 遍历每个batch
+#     for bs in loader:
+#         # 输入
+#         input_ids = bs[0]
+#         labels = bs[2]
+
+#         # 输出
+#         outputs = model(input_ids, labels=labels)
+#         outputs = outputs[1]
+#         lab_outputs = torch.argmax(outputs,dim=2).cpu().numpy().tolist()
+#         tgt_size = labels.size()[0]
+        
+        
+#         assert tgt_size == len(lab_outputs), "valid set: length difference between tgt and pred, in batch:%s" %str(i)
+#         bs_tgt = labels.tolist()
+#         input_ids = input_ids.tolist()
+#         lab_groundtruth.extend(bs_tgt)
+#         lab_predict.extend(lab_outputs)
+
+
+#         # 计算准确率
+#         for x,y in zip(lab_outputs, bs_tgt):
+#             for sub_x, sub_y in zip(x, y):
+#                 if sub_x == sub_y:
+#                     count_match += 1
+#             count += len(x)
+#         i += 1
+
+#         if i == input_ids.size()[0]-1:
+#             print('predict:   ', x[:20])
+#             print('grandtruth:', y[:20])
+
+
+#     # 计算acc
+#     acc = count_match/count
+#     f1 = acc
+#     # 计算f1
+#     # lab_groundtruth = [ x for line in lab_groundtruth for x in line if x != 11]
+#     # lab_predict = [ x for line in lab_predict for x in line if x != 11]
+#     # f1 = f1_score(lab_groundtruth, lab_predict, average='macro')
+#     return f1, acc
+
+
+def eval():
+    pass
+
+
+def infer():
+    pass
+
+
+
+def get_tag_index(labels, string_tag, tag_method='BMES'):
+    """
+    获取满足标注规则，标签的index
+    labels: 包含标注类别的list
+    string_tag: 标注的类别，如NAME, LOC等
+    tag_method: 标注方法，BIO/BMES
+    """
+    b = 'B-'+string_tag
+    m = 'M-'+string_tag
+    e = 'E-'+string_tag
+    s = 'S-'+string_tag
+    o = 'O'
+
+    target = []
+    tmp = []
+    for i, lab in enumerate(labels):
+        if b == lab:
+            tmp.append(i)
+        elif len(tmp) and m == lab:
+            tmp.append(i)
+        elif len(tmp) and e == lab:
+            tmp.append(i)
+            tmp = [tmp[0]] + [tmp[-1]]
+            target.append(tmp)
+            tmp = []
+        elif not len(tmp) and s == lab:
+            tmp = [i]
+            target.append(tmp)
+            tmp = []
+    return target
+
+
+
+def get_score(loader, model, index2tgt, tokenizer):
+    """
+    计算在验证集上的准确率
+    """
+    # print('valid len:', len(srciqi))
+    i = 0
+    count = 0
+    count_match = 0
+    lab_groundtruth = []
+    lab_predict = []
+    grandtruth = {}
+    predict = {}
+    
+    # 遍历每个batch
+    for bs in loader:
+        # 输入
+        input_ids = bs[0]
+        labels = bs[2]
+
+        # 输出
+        outputs = model(input_ids, labels=labels)
+        outputs = outputs[1]
+        lab_outputs = torch.argmax(outputs,dim=2).cpu().numpy().tolist()
+        tgt_size = labels.size()[0]
+        
+        
+        assert tgt_size == len(lab_outputs), "valid set: length difference between tgt and pred, in batch:%s" %str(i)
+        bs_tgt = labels.tolist()
+        input_ids = input_ids.tolist()
+        lab_groundtruth.extend(bs_tgt)
+        lab_predict.extend(lab_outputs)
+
+        # 遍历每一行
+        for i, (line_gt, line_pred) in enumerate(zip(bs_tgt, lab_outputs)):
+            # 标签转换
+            line_gt = [index2tgt[x] for x in line_gt]
+            line_pred = [index2tgt[x] for x in line_pred]
+            # 输入index转文字
+            line_input = [tokenizer.convert_ids_to_tokens(x) for x in input_ids[i]]
+            
+            # 遍历标签类型
+            for lab in Config.tag_type:
+                grandtruth.setdefault(lab,[])
+                predict.setdefault(lab,[])
+                # 获取标签
+                index_gt = get_tag_index(line_gt, lab, tag_method='BMES')
+                index_pred = get_tag_index(line_pred, lab, tag_method='BMES')
+                # 获取文字
+                # grandtruth
+                tmp_name_gt = []
+                for ids in index_gt:
+                    name = ''
+                    if len(ids) == 2:
+                        name = ''.join(line_input[ids[0]:ids[1]+1])
+                    if len(ids) == 1:
+                        name = line_input[ids[0]]
+                    if name:
+                        tmp_name_gt.append(name)
+                # predict
+                tmp_name_pred = []
+                for ids in index_pred:
+                    name = ''
+                    if len(ids) == 2:
+                        name = ''.join(line_input[ids[0]:ids[1]+1])
+                    if len(ids) == 1:
+                        name = line_input[ids[0]]
+                    if name:
+                        tmp_name_pred.append(name)
+                grandtruth[lab].append(tmp_name_gt)
+                predict[lab].append(tmp_name_pred)
+    # 计算指标
+    obj_f1 = WMF1(grandtruth, predict)
+    wmf1 = obj_f1.compute_wmf1()
+
+    return wmf1
+
+    
+
+
+
+if __name__ == '__main__':
+    train()
+
