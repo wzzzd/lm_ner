@@ -1,6 +1,8 @@
 # LM_NER
-基于Pytorch的命名实体识别框架，支持LSTM+CRF、Bert+CRF、RoBerta+CRF等框架.
+基于Pytorch的命名实体识别框架，支持LSTM+CRF、Bert+CRF、RoBerta+CRF等框架。
+
 模型能解决flat ner问题（非嵌套命名实体识别问题）。
+
 同时支持中英文的数据集的实体识别任务。
 
 
@@ -21,11 +23,33 @@
 * CNER：
     * 来自：https://github.com/lonePatient/BERT-NER-Pytorch
     * 关于简历的的数据。
-    * 数据分为8类标签类别，分别为：国家（CONT）,民族（RACE）,姓名（NAME）,组织（ORG）,地址（LOC）,专业（PRO）,学历（EDU）,职称（TITLE）
+    * 数据分为8类标签类别，分别为：
+```
+国家（CONT）
+民族（RACE）
+姓名（NAME）
+组织（ORG）
+地址（LOC）
+专业（PRO）
+学历（EDU）
+职称（TITLE）
+```
 * CLUENER：（待补充）
     * 来自：https://github.com/CLUEbenchmark/CLUENER2020
     * 数据来源于Sina News RSS.
-    * 数据分为10个标签类别，分别为: 地址（address），书名（book），公司（company），游戏（game），政府（government），电影（movie），姓名（name），组织机构（organization），职位（position），景点（scene） 
+    * 数据分为10个标签类别，分别为: 
+```
+    地址（address）
+    书名（book）
+    公司（company）
+    游戏（game）
+    政府（government）
+    电影（movie）
+    姓名（name）
+    组织机构（organization）
+    职位（position）
+    景点（scene） 
+```
 
 * 加入自己的数据集
     * 可使用本项目的处理方式，将数据集切分为3部分：train/valid/test，其中token和label之间用空格分割。
