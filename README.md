@@ -10,7 +10,7 @@
 ```
     python3.6
     numpy==1.19.5
-	pandas==1.1.3
+    pandas==1.1.3
     torch==1.3.0
     transformers==4.6.1
 ```
