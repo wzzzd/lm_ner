@@ -1,12 +1,14 @@
 # LM_NER
-基于Pytorch的命名实体识别框架，支持LSTM+CRF、Bert+CRF、RoBerta+CRF等框架。
+
+## Info
+基于Pytorch的命名实体识别框架，支持LSTM+CRF、Bert+CRF、RoBerta+CRF等模型。
 
 模型能解决flat ner问题（非嵌套命名实体识别问题）。
 
 同时支持中英文的数据集的实体识别任务。
 
 
-# 依赖
+## Requirement
 ```
     python3.6
     numpy==1.19.5
@@ -19,7 +21,7 @@
     pip install -r requirement.txt
 ```
 
-# Datasets
+## Datasets
 * **CNER**
     * 来自：https://github.com/lonePatient/BERT-NER-Pytorch
     * 关于简历的的数据。
@@ -53,8 +55,9 @@
 
 * **加入自己的数据集**
     * 可使用本项目的处理方式，将数据集切分为3部分：train/valid/test，其中token和label之间用空格分割。
-    * 在 ./dataset 目录下新建一个文件夹，并把3个数据文件放置新建文件夹下
-    * 处理好数据集后，需要修改文件 arg_config.py 中的变量，英文为'en'，中文为'zh'
+    * 数据使用BIO的标注方式。
+    * 在 ./dataset 目录下新建一个文件夹，并把3个数据文件放置新建文件夹下。
+    * 处理好数据集后，需要修改文件 arg_config.py 中的变量，英文为'en'，中文为'zh'。
     ```
         self.language = 'en'
     ```
@@ -93,7 +96,7 @@
     ```
 
 
-# Model
+## Model
 项目目前支持以下模型：
 * LSTM + CRF
 * Bert + CRF
@@ -101,7 +104,7 @@
 
 
 
-# Get Started
+## Get Started
 ### 1. 训练
 准备好训练数据后，终端可运行命令
 ```
@@ -135,7 +138,7 @@
     python3 run.py --mode infer
 ```
 
-# Result
+## Result
 模型预测结果示例如下：
 
 
@@ -143,9 +146,15 @@
 
 
 ## Reference
-https://arxiv.org/pdf/1603.01360.pdf
+【LSTM+CRF】https://arxiv.org/pdf/1603.01360.pdf
 
-https://github.com/lonePatient/BERT-NER-Pytorch
+【Bert】https://arxiv.org/pdf/1810.04805.pdf
+
+【RoBerta】https://arxiv.org/pdf/1907.11692.pdf
+
+【Github:BERT-NER-Pytorch】https://github.com/lonePatient/BERT-NER-Pytorch
+
+【transformers】https://github.com/huggingface/transformers
 
 
 
