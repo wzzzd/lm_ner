@@ -135,7 +135,7 @@
 ```
 终端可运行命令
 ```
-    python3 run.py --mode infer
+    python3 run.py
 ```
 
 ## Result
