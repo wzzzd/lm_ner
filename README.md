@@ -1,7 +1,7 @@
 # LM_NER
 
 ## Info
-基于Pytorch的命名实体识别框架，支持LSTM+CRF、Bert+CRF、RoBerta+CRF等模型。
+基于Pytorch的命名实体识别/信息抽取框架，支持LSTM+CRF、Bert+CRF、RoBerta+CRF等模型。
 
 模型能解决flat ner问题（非嵌套命名实体识别问题）。
 
@@ -76,21 +76,21 @@
         今 O
         任 O
         广 B-ORG
-        东 M-ORG
-        X M-ORG
-        X M-ORG
-        X M-ORG
-        X M-ORG
-        X M-ORG
-        X M-ORG
-        股 M-ORG
-        份 M-ORG
-        有 M-ORG
-        限 M-ORG
-        公 M-ORG
-        司 E-ORG
+        东 I-ORG
+        X I-ORG
+        X I-ORG
+        X I-ORG
+        X I-ORG
+        X I-ORG
+        X I-ORG
+        股 I-ORG
+        份 I-ORG
+        有 I-ORG
+        限 I-ORG
+        公 I-ORG
+        司 I-ORG
         董 B-TITLE
-        事 E-TITLE
+        事 I-TITLE
         、 O
         ...
     ```
@@ -141,7 +141,12 @@
 ## Result
 模型预测结果示例如下：
 
+![指标](./file/metrics.png)
 
+
+## FAQ
+1. 训练过程报错 ValueError: Connection error, and we cannot find the requested files in the cached path. 
+    * 网络问题，原因是与huggingface服务器断开，预训练模型下载失败了，重跑一次，一次不行再来一次~
 
 
 
