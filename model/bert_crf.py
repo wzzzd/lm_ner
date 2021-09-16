@@ -24,6 +24,13 @@ class BertCRF(BertPreTrainedModel):
     def forward(self, input_ids, token_type_ids=None, attention_mask=None,labels=None,input_lens=None):
         outputs =self.bert(input_ids = input_ids,attention_mask=attention_mask,token_type_ids=token_type_ids)
         sequence_output = outputs[0]
+        
+        # from functools import reduce
+        # hidden_layer = outputs.hidden_states
+        # avg_hidden_layer = reduce(lambda x,y: x+y, hidden_layer)
+        # sequence_output = avg_hidden_layer/float(len(hidden_layer))
+        # pooled_output = self.pooler(avg_hidden_layer)
+        
         sequence_output = self.dropout(sequence_output)
         logits = self.classifier(sequence_output)
         outputs = (None, logits)

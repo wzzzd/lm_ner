@@ -11,10 +11,10 @@ from metrics.f1 import SeqEntityScore
 
 
 
-def eval(loader, model, id2label, func_index2token, markup='bio'):
+def eval(loader, model, id2label, func_index2token, markup='bios'):
     
     metric = SeqEntityScore(id2label, markup=markup)
-    # model.eval()
+    
 
     # 遍历每个batch
     for bs in loader:
@@ -23,10 +23,11 @@ def eval(loader, model, id2label, func_index2token, markup='bio'):
             input_ids = bs[0]
             att_mask = bs[1]
             labels = bs[2]
-            # 输入index转文字
-            line_input = [' '.join([func_index2token(x) for x in line  if func_index2token(x) != '[PAD]']) for line in input_ids.cpu().numpy().tolist() ]
 
             # 输出
+            if isinstance(model, nn.DataParallel) or isinstance(model, nn.parallel.DistributedDataParallel):
+                model = model.module
+            model.eval()
             outputs = model(input_ids)
             outputs = outputs[1]
             outputs = model.crf.decode(outputs, att_mask)                       # (1, batch_size, seq_size)
@@ -36,9 +37,6 @@ def eval(loader, model, id2label, func_index2token, markup='bio'):
         
         assert tgt_size == len(predicts), "valid set: length difference between tgt and pred, in batch:%s" %str(i)
         labels = labels.tolist()
-        input_ids = input_ids.tolist()
-        # lab_groundtruth.extend(bs_tgt)
-        # lab_predict.extend(lab_outputs)
 
         # index 转 label
         labels = [[id2label[x] for x in line if id2label[x] != '[PAD]'] for line in labels]
@@ -50,9 +48,7 @@ def eval(loader, model, id2label, func_index2token, markup='bio'):
 
         # 更新
         metric.update(labels_tranf, predicts_tranf)
-        # print(line_input[0])
-        # print(labels_tranf[0])
-        # print(predicts_tranf[0])
+        
     # 获取指标结果
     eval_info, entity_info = metric.result()
     for k, v in entity_info.items():

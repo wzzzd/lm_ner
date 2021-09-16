@@ -7,7 +7,7 @@ def open_file(path, sep=' ', mode='train'):
     src = []
     tgt = []
     with open(path, 'r', encoding='utf8') as f:
-        content = f.readlines()#[:500]
+        content = f.readlines()#[:2000]
         tmp_src = []
         tmp_tgt = []
         for i, line in enumerate(content):

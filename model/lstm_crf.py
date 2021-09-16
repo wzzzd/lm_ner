@@ -35,6 +35,7 @@ class LSTM_CRF(nn.Module):
  
 
     def forward(self, input_ids, labels=None, attention_mask=None):
+        self.lstm.flatten_parameters()
         # embedding
         embeds = self.embedding(input_ids)
         # embeds = embeds.unsqueeze(1)

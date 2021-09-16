@@ -2,6 +2,7 @@
 # -*- coding: UTF-8 -*-
 
 
+import os
 import time
 import numpy as np
 import torch
@@ -19,6 +20,7 @@ if __name__ == '__main__':
     # 配置文件
     # logging.basicConfig(filename='./sys.log', filemode='a', level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")  #日志配置
     Config = Config()
+    os.environ["CUDA_VISIBLE_DEVICES"] = Config.visible_device
 
     # 设置随机种子，保证结果每次结果一样
     np.random.seed(1)

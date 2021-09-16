@@ -6,12 +6,15 @@ import torch
 import logging
 import pandas as pd
 import pickle as pkl
-from arg_config import Config
-from transformers import BertTokenizer
-import torch
-from torch.utils.data import Dataset, DataLoader
-from utils.OIJob import open_file, write_file
 
+from torch.autograd import backward
+from arg_config import Config
+from transformers import BertTokenizer, AlbertTokenizer
+import torch
+from torch.utils.data import Dataset, DataLoader, TensorDataset, RandomSampler
+from torch.utils.data.distributed import DistributedSampler
+from utils.OIJob import open_file, write_file
+import torch.distributed as dist
 
 class DatasetIterater(Dataset):
     """
@@ -34,10 +37,20 @@ class DataManager(object):
     数据处理类
     """
     def __init__(self):
-
         self.config = Config()
+        
+        if self.config.mode == 'train' and torch.cuda.device_count() > 1:
+            torch.distributed.init_process_group(backend='nccl', 
+                                                 init_method=self.config.init_method, 
+                                                #  init_method='env://',
+                                                 rank=0, 
+                                                 world_size=1)
+            torch.distributed.barrier()  # Make sure only the first process in distributed training process the dataset, and the others will use the cache
+    
         self.sign_pad = '[PAD]'
         self.sign_unk = '[UNK]'
+        self.sign_cls = '[CLS]'
+        self.sign_sep = '[SEP]'
         # bert分词器
         # self.tokenizer = BertTokenizer.from_pretrained(self.config.model_name)
         self.device = torch.device(self.config.device)
@@ -60,50 +73,20 @@ class DataManager(object):
         # 数据转换成tensor
         self.vocab2index = self.init_vocab(mode=self.config.mode)
         self.dict_data = self.data2tensor(dict_data)
-        # elif self.config.mode == 'eval':
-        #     dict_data = self.read_dataset(mode=self.config.mode)
-        #     self.token2index, self.index2token = self.read_vocab_dictionary()
-        #     self.tgt2index, self.index2tgt = self.read_label_dictionary()
-        #     self.num_labels = len(self.tgt2index.keys())
-        #     dict_data = self.transfer_label(dict_data, self.tgt2index)
-        #     self.vocab2index = self.init_vocab(mode=self.config.mode)
-        #     self.dict_data = self.data2tensor(dict_data)
-        # else:
-        #     dict_data = self.read_dataset(mode=self.config.mode)
-        #     self.token2index, self.index2token = self.read_vocab_dictionary()
-        #     self.tgt2index, self.index2tgt = self.read_label_dictionary()
-        #     self.num_labels = len(self.tgt2index.keys())
-        #     dict_data = self.transfer_label(dict_data, self.tgt2index)
-        #     self.vocab2index = self.init_vocab(mode=self.config.mode)
-        #     self.dict_data = self.data2tensor(dict_data)
 
 
     def init_vocab(self, mode):
         """初始化词表"""
-        if self.config.model_name in  ['lstm_crf']:
-            voacb = lambda x: self.token2index[x]
-        else:
-            if mode == 'train':
-                model_name = self.config.model_name
-            else:
-                model_name = self.config.path_tokenizer
-            voacb = BertTokenizer.from_pretrained(model_name)
-            voacb = voacb.convert_tokens_to_ids
-        return voacb
+        vocab = lambda x: self.token2index[x]            
+        return vocab
     
 
     def word2index(self, x):
         """将词转换为index"""
-        if self.config.model_name in  ['lstm_crf']:
-            if self.token2index.get(x, -1) != -1:
-                # print(self.token2index.get(x, -1))
-                token = self.token2index[x]
-            else:
-                token = self.vocab2index(self.sign_unk)
+        if self.token2index.get(x, -1) != -1:
+            token = self.token2index[x]
         else:
-            token = self.vocab2index(x)
-        # if token >= 12170:
-        #     print('token:%s  index:%s'%(x, token))
+            token = self.token2index[self.sign_unk]
         return token
 
 
@@ -130,28 +113,57 @@ class DataManager(object):
 
     def get_vocab_dictionary(self, dict_data):
         """获取训练集词表"""
-        src = dict_data['train']['src']
-        words = [w for line in src for w in line if w != '']
-        words = list(set(words))
-        words = sorted(words, reverse=False)
-        token2index = {x:i for i,x in enumerate(words)}
-        index2token = {i:x for i,x in enumerate(words)}
-        index2token[len(token2index)] = self.sign_pad
-        token2index[self.sign_pad] = len(token2index)
-        if self.sign_unk not in token2index.keys():
-            index2token[len(token2index)+1] = self.sign_unk
-            token2index[self.sign_unk] = len(token2index) + 1
-        # 标签映射表存到本地
-        # write_file(token2index, './datasets/Shopline/vocab.txt')
+        if self.config.model_name in self.config.model_list_nopretrain:
+            src = dict_data['train']['src']
+            words = [w for line in src for w in line if w != '']
+            words = list(set(words))
+            words = sorted(words, reverse=False)
+            token2index = {x:i for i,x in enumerate(words)}
+            index2token = {i:x for i,x in enumerate(words)}
+            index2token[len(token2index)] = self.sign_pad
+            token2index[self.sign_pad] = len(token2index)
+            if self.sign_unk not in token2index.keys():
+                index2token[len(token2index)] = self.sign_unk
+                token2index[self.sign_unk] = len(token2index)
+            if self.sign_cls not in token2index.keys():
+                index2token[len(token2index)] = self.sign_cls
+                token2index[self.sign_cls] = len(token2index)
+            if self.sign_sep not in token2index.keys():
+                index2token[len(token2index)] = self.sign_sep
+                token2index[self.sign_sep] = len(token2index)
+            # 标签映射表存到本地
+            # write_file(token2index, self.config.path_vocab+'.txt')
+            # pkl.dump(token2index, open(self.config.path_vocab, 'wb'))
+        else:
+            model_name = self.config.model_pretrain_online_checkpoint
+            vocab = self.map_tokenizer(self.config.model_name).from_pretrained(model_name)
+            if not os.path.exists(self.config.path_tokenizer):
+                os.makedirs(self.config.path_tokenizer)
+            vocab.save_vocabulary(self.config.path_tokenizer)
+            vocabulary = vocab.get_vocab()
+            token2index = vocabulary
+            index2token = {i:x for x,i in vocabulary.items()}
+            self.sign_unk = vocab.unk_token
+            self.sign_pad = vocab.pad_token
+        write_file(token2index, self.config.path_vocab+'.txt')
         pkl.dump(token2index, open(self.config.path_vocab, 'wb'))
         return token2index, index2token
     
 
     def read_vocab_dictionary(self):
         """读取训练集词表"""
-        tokenizer = pkl.load(open(self.config.path_vocab, 'rb'))
-        index2token = {i:x for x,i in tokenizer.items()}
-        token2index = {x:i for x,i in tokenizer.items()}
+        if self.config.model_name in self.config.model_list_nopretrain:
+            tokenizer = pkl.load(open(self.config.path_vocab, 'rb'))
+            index2token = {i:x for x,i in tokenizer.items()}
+            token2index = {x:i for x,i in tokenizer.items()}
+        else:
+            model_name = self.config.model_pretrain_online_checkpoint
+            vocab = self.map_tokenizer(self.config.model_name).from_pretrained(model_name)
+            vocabulary = vocab.get_vocab()
+            token2index = {x:i for i,x in enumerate(vocabulary)}
+            index2token = {i:x for i,x in enumerate(vocabulary)}
+            self.sign_unk = vocab.unk_token
+            self.sign_pad = vocab.pad_token
         return token2index, index2token
 
 
@@ -210,10 +222,13 @@ class DataManager(object):
             assert len(src) == len(tgt), "length is not equation between src and tgt."
             # padding
             if pad:
-                max_seq_length = self.config.max_seq_length
+                max_seq_length = self.config.max_seq_length - 2
                 src = [ [x for x in line] for line in src]
                 src = [x[:max_seq_length] if len(x) >= max_seq_length else x + [self.sign_pad]*(max_seq_length-len(x))  for x in src]
                 tgt = [x[:max_seq_length] if len(x) >= max_seq_length else x + [self.tgt2index['O']]*(max_seq_length-len(x))  for x in tgt]
+            # 加上[CLS]/[SEP]字符
+            src = [ [self.sign_cls]+line+[self.sign_sep] for line in src]
+            tgt = [ [self.tgt2index['O']]+line+[self.tgt2index['O']] for line in tgt]
             # Input转换
             src_ids = [[self.word2index(x) for x in line] for line in src]      # token转换成index
             attention_mask = [[1 if x != self.sign_pad else 0 for x in line] for line in src]           # attention matrix
@@ -235,9 +250,10 @@ class DataManager(object):
         src = self.dict_data['train']['src']
         tgt = self.dict_data['train']['tgt']
         attention_mask = self.dict_data['train']['attention_mask']
+        # data = TensorDataset(src, tgt, attention_mask)
         data = DatasetIterater(src, tgt, attention_mask)
-        dataloader = DataLoader(data, batch_size=self.config.batch_size, shuffle=True)    # collate_fn=self.scale
-        print('trian size : %s' %str(len(src)))
+        sampler = RandomSampler(data) if not torch.cuda.device_count() > 1 else DistributedSampler(data)
+        dataloader = DataLoader(data, sampler=sampler, batch_size=self.config.batch_size)    # collate_fn=self.scale
         return dataloader
         
     
@@ -246,9 +262,10 @@ class DataManager(object):
         src = self.dict_data['dev']['src']
         tgt = self.dict_data['dev']['tgt']
         attention_mask = self.dict_data['dev']['attention_mask']
+        # data = TensorDataset(src, tgt, attention_mask)
         data = DatasetIterater(src, tgt, attention_mask)
-        dataloader = DataLoader(data, batch_size=self.config.batch_size, shuffle=True)
-        print('valid size : %s' %str(len(src)))
+        sampler = RandomSampler(data) if not torch.cuda.device_count() > 1 else DistributedSampler(data)
+        dataloader = DataLoader(data, sampler=sampler, batch_size=self.config.batch_size)
         return dataloader
 
 
@@ -257,33 +274,18 @@ class DataManager(object):
         src = self.dict_data['test']['src']
         tgt = self.dict_data['test']['tgt']
         attention_mask = self.dict_data['test']['attention_mask']
+        # data = TensorDataset(src, tgt, attention_mask)
         data = DatasetIterater(src, tgt, attention_mask)
-        dataloader = DataLoader(data, batch_size=self.config.batch_size, shuffle=True)
-        print('test size : %s' %str(len(src)))
+        sampler = RandomSampler(data) if not torch.cuda.device_count() > 1 else DistributedSampler(data)
+        dataloader = DataLoader(data, sampler=sampler, batch_size=self.config.batch_size)
         return dataloader
     
 
-    # def scale(self, batch_data, pad=True):
-    #     """对每个batch的数据进行规范化"""
-    #     # 获取输入数据
-    #     src, tgt = list(zip(*batch_data))
-    #     assert len(src) == len(tgt), "length is not equation between src and tgt."
-    #     # padding
-    #     if pad:
-    #         max_seq_length = self.config.max_seq_length
-    #         src = [ [x for x in line] for line in src]
-    #         src = [x[:max_seq_length] if len(x) >= max_seq_length else x + [self.sign_pad]*(max_seq_length-len(x))  for x in src]
-    #         tgt = [x[:max_seq_length] if len(x) >= max_seq_length else x + [self.tgt2index[self.sign_pad]]*(max_seq_length-len(x))  for x in tgt]
-    #     # Input转换
-    #     src_ids = [[self.tokenizer.convert_tokens_to_ids(x) for x in line] for line in src]      # token转换成index
-    #     attention_mask = [[1 if x != self.sign_pad else 0 for x in line] for line in src]           # attention matrix
-    #     # 转换成tensor
-    #     tensor_src_ids = torch.LongTensor(src_ids).to(self.device)
-    #     tensor_attention_mask = torch.LongTensor(attention_mask).to(self.device)
-    #     tensor_tgt = torch.LongTensor(tgt).to(self.device)
-
-    #     return (tensor_src_ids, tensor_attention_mask, tensor_tgt)
-
-
-
+    def map_tokenizer(self, name):
+        """模型映射"""
+        if name == 'albert_crf':
+            tokenizer = AlbertTokenizer
+        else:
+            tokenizer = BertTokenizer
+        return tokenizer
 

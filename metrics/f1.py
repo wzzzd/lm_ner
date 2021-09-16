@@ -5,7 +5,7 @@ from collections import Counter
 class SeqEntityScore(object):
     """计算Seq NER多label的precision/recall/f1值"""
 
-    def __init__(self, id2label,markup='bios'):
+    def __init__(self, id2label,markup='bio'):
         self.id2label = id2label
         self.markup = markup
         self.reset()
