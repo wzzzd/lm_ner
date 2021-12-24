@@ -58,7 +58,7 @@
         学历（EDU）
         职称（TITLE）
     ```
-* **CLUENER（待补充）**
+* **CLUENER**
     * 来自：https://github.com/CLUEbenchmark/CLUENER2020
     * 数据来源于Sina News RSS.
     * 数据分为10个标签类别，分别为: 
@@ -132,7 +132,7 @@
 ```
     python3 run.py
 ```
-### 2 评估（待补充）
+### 2 评估
 加载已训练好的模型，并使用valid set作模型测试，输出文件到 ./dataset/${your_dataset}/output.txt 目录下。
 
 需要修改config文件中的变量值，并保存。
@@ -147,7 +147,7 @@
     python3 run.py
 ```
 
-### 3. 预测（待补充）
+### 3. 预测
 预测未知标签数据集，并保存为文件 ./dataset/${your_dataset}/output.txt 目录下。
 
 需要修改config文件中的变量值，并保存。
