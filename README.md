@@ -7,6 +7,26 @@
 
 同时支持中英文的数据集的实体识别任务。
 
+若想要精度更高、推断速度更快的模型，可见另外一个项目：[LM_SPAN](https://github.com/wzzzd/lm_ner_span/blob/main/README.md)
+
+
+
+## 支持的训练模式
+
+- 支持中英文语料训练
+    - 支持中英文的信息抽取任务
+- 混合精度训练
+    - 用于提升训练过程效率，缩短训练时间
+    - 配置文件`arg_config.py`中的变量`adv_option`
+- GPU多卡训练
+    - 用于分布式训练，支持单机单卡、多卡训练
+    - 配置文件`arg_config.py`中的变量`visible_device`用于设置可见的GPU卡号，多卡情况下用`,`间隔开
+- 对抗训练
+    - 在模型embedding层增加扰动，使模型学习对抗扰动，提升表现，需要额外增加训练时间
+    - 配置文件`arg_config.py`中的变量`adv_option`用于设置可见的对抗模式，目前支持FGM/PGD
+- 对比学习
+    - 用于增强模型语义特征提取能力，待补充
+
 
 ## Requirement
 ```
@@ -15,7 +35,9 @@
     pandas==1.1.3
     torch==1.3.0
     transformers==4.6.1
+    apex==0.1 (安装方法见：https://github.com/NVIDIA/apex)
 ```
+
 可通过以下命令安装依赖包
 ```
     pip install -r requirement.txt

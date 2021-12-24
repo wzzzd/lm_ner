@@ -10,6 +10,7 @@ import torch
 import logging
 import pickle as pkl
 import torch.nn as nn
+from apex import amp
 from torch.nn import functional as F
 from sklearn.metrics import f1_score
 from transformers import AdamW
@@ -23,6 +24,7 @@ from model.roberta_crf import RoBertaCRF
 from model.lstm_crf import LSTM_CRF
 from model.transformer_crf import TransformerCRF
 from model.albert_crf import AlbertCRF
+from model.optimal.adversarial import FGM,PGD
 from config.BertConfig import BertConfig
 from config.AlbertConfig import AlbertConfig
 from utils.progressbar import ProgressBar
@@ -76,6 +78,7 @@ def train(train_loader, valid_loader, num_labels, index2tgt):
             model.load_state_dict(torch.load(Config.path_model + 'pytorch_model.bin'))
         else:
             # 重新初始化模型参数
+            # if Config.model_name in Config.model_list_nopretrain:
             init_network(model)
     else:
         tokenizer = map_tokenizer(Config.model_name).from_pretrained(Config.model_pretrain_online_checkpoint)
@@ -90,13 +93,14 @@ def train(train_loader, valid_loader, num_labels, index2tgt):
         else:
             # 加载预训练模型
             model_config = AutoConfig.from_pretrained(Config.model_pretrain_online_checkpoint, num_labels=num_labels)#num_labels=len(tgt2index.keys())-1)
-            model = model.from_pretrained(Config.model_pretrain_online_checkpoint, config=model_config)
+            model = model.from_pretrained(Config.model_pretrain_online_checkpoint, config=model_config)    
+        # # 冻结base model的参数
+        # if Config.model_pretrain_trainable:
+        #     for param in model.base_model.parameters():
+        #         param.requires_grad = True
         
-        # 冻结base model的参数
-        if Config.model_pretrain_trainable:
-            for param in model.base_model.parameters():
-                param.requires_grad = True
-                
+    model.to(device)
+    # 打印模型参数
     for name,parameters in model.named_parameters():
         print(name,':',parameters.size())
     
@@ -134,16 +138,38 @@ def train(train_loader, valid_loader, num_labels, index2tgt):
     scheduler = get_linear_schedule_with_warmup(optimizer, num_warmup_steps=warmup_steps,
                                                 num_training_steps=t_total)
     # optimizer = AdamW(model.parameters(), lr=Config.learning_rate)
+    
+    
+    # 混合精度训练
+    if Config.fp16:
+        model, optimizer = amp.initialize(model, optimizer, opt_level=Config.fp16_opt_level)
 
     # 多卡训练
-    model.to(device)
     if torch.cuda.device_count() > 1:
-        # torch.distributed.init_process_group(backend='nccl', init_method='tcp://localhost:23456', rank=0, world_size=1)
         model = nn.parallel.DistributedDataParallel(model, 
                                                     find_unused_parameters=True,
                                                     broadcast_buffers=True)
         # model = nn.DataParallel(model)
-        
+    
+    # 对抗训练
+    if Config.adv_option == 'FGM':
+        fgm = FGM(model, emb_name=Config.adv_name, epsilon=Config.adv_epsilon)
+    if Config.adv_option == 'PGD':
+        pgd = PGD(model, emb_name=Config.adv_name, epsilon=Config.adv_epsilon)
+
+    # Train!
+    print(">>>>>>>> Running training >>>>>>>>")
+    print("  Num examples = %d" %(len(train_loader)*Config.batch_size))
+    print("  Num Epochs = %d" %Config.epoch)
+    print("  Instantaneous batch size per GPU = %d"%Config.batch_size)
+    print("  GPU ids = %s" %Config.visible_device)
+    print("  Total step = %d" %t_total)
+    print("  Warm up step = %d" %warmup_steps)
+    print("  FP16 Option = %s" %Config.fp16)
+    print("  Adv Option = %s" %Config.adv_option)
+    print(">>>>>>>> Running training >>>>>>>>")
+    
+    
     print('start training..')
     best_f1 = 0
     global_step = 0
@@ -163,13 +189,46 @@ def train(train_loader, valid_loader, num_labels, index2tgt):
             # optimizer.zero_grad()   # 梯度清零
             outputs = model(input_ids, labels=labels, attention_mask=attention_mask)   #
             loss = outputs[0]           # 获取每个token的logit输出结果
-            loss = loss.mean()
-            # print(loss)
             
-            loss.backward()             
+            if torch.cuda.device_count() > 1:
+                loss = loss.mean()
+            # 反向传播
+            if Config.fp16:
+                with amp.scale_loss(loss, optimizer) as scaled_loss:
+                    scaled_loss.backward()
+            else:
+                loss.backward()
+
+            # 对抗训练
+            if Config.adv_option == 'FGM':
+                fgm.attack()
+                loss_adv = model(input_ids, labels=labels, attention_mask=attention_mask)[0]
+                if torch.cuda.device_count() > 1:
+                    loss_adv = loss_adv.mean()
+                loss_adv.backward()
+                fgm.restore()
+            if Config.adv_option == 'PGD':
+                pgd.backup_grad()
+                K = 3
+                for t in range(K):
+                    pgd.attack(is_first_attack=(t==0))  # 在embedding上添加对抗扰动, first attack时备份param.data
+                    if t != K-1:
+                        model.zero_grad()
+                    else:
+                        pgd.restore_grad()
+                    loss_adv = model(input_ids, labels=labels, attention_mask=attention_mask)[0]
+                    loss_adv.backward()                      # 反向传播，并在正常的grad基础上，累加对抗训练的梯度
+                pgd.restore()                           # 恢复embedding参数
+            # 梯度操作
             optimizer.step()
-            scheduler.step()  # Update learning rate schedule
-            optimizer.zero_grad()   # 梯度清零
+            scheduler.step()
+            model.zero_grad()
+
+            # loss.backward()             
+            # optimizer.step()
+            # scheduler.step()
+            # model.zero_grad()
+            # # optimizer.zero_grad()   # 梯度清零
             global_step += 1       
             # progress_bar.update(1)
             progress_bar(i, {'loss': loss.item()})
@@ -199,6 +258,7 @@ def train(train_loader, valid_loader, num_labels, index2tgt):
         f1 = eval(valid_loader, model, index2tgt, func_index2token)
         print('current epoch: %s/%s  loss:%.6f  valid f1:%.3f ' %(epo, Config.epoch, loss.item(), f1))
     print('training end..')
+
 
 
 def get_tag_index(labels, string_tag, tag_method='BMES'):
