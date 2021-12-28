@@ -8,7 +8,7 @@ import pandas as pd
 import pickle as pkl
 
 from torch.autograd import backward
-from arg_config import Config
+from Config import Config
 from transformers import BertTokenizer, AlbertTokenizer
 import torch
 from torch.utils.data import Dataset, DataLoader, TensorDataset, RandomSampler

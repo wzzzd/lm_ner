@@ -18,7 +18,7 @@ from transformers.optimization import get_linear_schedule_with_warmup
 from transformers import BertTokenizer, BertModel, BertForSequenceClassification, AlbertTokenizer
 from transformers import AutoModel, AutoTokenizer, AutoConfig
 
-from arg_config import Config
+from Config import Config
 from model.bert_crf import BertCRF
 from model.roberta_crf import RoBertaCRF
 from model.lstm_crf import LSTM_CRF

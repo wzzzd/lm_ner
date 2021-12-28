@@ -8,14 +8,14 @@ class Config(object):
         self.mode = 'train'                     # train/eval/test
         self.continue_train = False             # 是否继续训练上次的模型
         # self.multi_gpu = False
-        self.visible_device = '5'
+        self.visible_device = '0'
         self.device = 'cuda:0'
         self.model_name = 'bert_crf'         
         self.language = 'en'
 
         self.model_list_nopretrain = ['lstm_crf', 'transformer']
         self.model_list_pretrain = ['albert_crf', 'bert_crf', 'roberta_crf']
-        self.model_pretrain_online_checkpoint = 'bert-base-chinese'     #'albert-base-v2'
+        self.model_pretrain_online_checkpoint = 'bert-base-uncased'     #'albert-base-v2'
         self.model_pretrain_trainable = True
 
         # data
@@ -24,8 +24,9 @@ class Config(object):
         self.path_output = './dataset/'+ self.dataset +'/output.txt'
 
         # base model
-        self.path_base = './checkpoints/' + self.dataset + '/init'
+        self.path_base = './checkpoints/' + self.dataset
         self.path_tokenizer = self.path_base + '/tokenizer/'
+        # self.path_bert = './checkpoints/'
         self.path_model = self.path_base + '/model/'
         self.path_optimizer = self.path_base + '/optimizer/'
         
@@ -49,16 +50,6 @@ class Config(object):
         # self.init_method = 'tcp://localhost:21339'
         self.port = str(random.randint(10000,60000))                # 多卡训练进程间通讯端口
         self.init_method = 'tcp://localhost:' + self.port           # 多卡训练的通讯地址
-
-
-        # 对抗训练
-        self.adv_option = 'None'                                      # 是否引入对抗训练：none/FGM/PGD
-        self.adv_name = 'word_embeddings'
-        self.adv_epsilon = 1.0
-        # 混合精度训练
-        self.fp16 = True
-        self.fp16_opt_level = 'O1'                                   # 训练可选'O1'，测试可选'O3'
-        
 
 
         # tag type
