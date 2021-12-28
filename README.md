@@ -9,6 +9,14 @@
 
 若想要精度更高、推断速度更快的模型，可见另外一个项目：[LM_SPAN](https://github.com/wzzzd/lm_ner_span/blob/main/README.md)
 
+## 支持的模型
+
+- LSTM+CRF
+- Trasformer+CRF
+- Bert+CRF
+- AlBert+CRF
+- RoBerta+CRF
+- DistilBert+CRF
 
 
 ## 支持的训练模式
