@@ -172,9 +172,11 @@
 模型预测结果示例如下：
 
 指标情况
+
 ![指标](./file/metrics.png)
 
 测试集
+
 ![指标](./file/predict.png)
 
 
