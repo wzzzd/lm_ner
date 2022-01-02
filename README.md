@@ -126,13 +126,6 @@
     ```
 
 
-## Model
-项目目前支持以下模型：
-* LSTM + CRF
-* Bert + CRF
-* RoBerta + CRF
-
-
 
 ## Get Started
 ### 1. 训练
