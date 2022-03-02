@@ -16,6 +16,7 @@ from transformers import AdamW
 from transformers.optimization import get_linear_schedule_with_warmup
 from transformers import BertTokenizer, BertModel, BertForSequenceClassification, AlbertTokenizer
 from transformers import AutoModel, AutoTokenizer, AutoConfig
+from torch.utils.tensorboard import SummaryWriter
 
 from Config import Config
 from model.bert_crf import BertCRF
@@ -201,8 +202,13 @@ class Trainer(object):
         print("  Adv Option = %s" %self.config.adv_option)
         print(">>>>>>>> Running training >>>>>>>>")
 
+        print(">>>>>>>> Model Structure >>>>>>>>")
+        for name,parameters in self.model.named_parameters():
+            print(name,':',parameters.size())
+        print(">>>>>>>> Model Structure >>>>>>>>\n")
 
         print('start training..')
+        writer = SummaryWriter(self.config.path_tensorboard)
         global_step = 0
         f1_best = 0
         # progress_bar = tqdm(range(len(train_loader)*self.config.epoch))
@@ -214,6 +220,7 @@ class Trainer(object):
                 loss = self.step(bs)
                 progress_bar(i, {'loss': loss.item()})
                 global_step += 1     
+                writer.add_scalar('loss', loss, global_step=global_step, walltime=None)
                 # 模型保存
                 if global_step % self.config.step_save==0 and global_step>0:
                     # 模型评估
@@ -221,10 +228,11 @@ class Trainer(object):
                     # 模型保存
                     f1_best = self.save_checkpoint(global_step, f1_eval, f1_best)
             # 验证效果
-            print('Test set Eval ' + '-'*20)
+            print('\nTest set Eval ' + '-'*20)
             eval(self.test_loader, self.model, self.index2tgt, self.func_index2token)
             # print('Test set: loss:%.6f  valid f1:%.3f ' %(epo, self.config.epoch, loss.item(), f1))
         print('training end..')
+        writer.close()
 
 
     def step(self, bs):
@@ -316,5 +324,5 @@ class Trainer(object):
                     model_save = self.model.module if torch.cuda.device_count() > 1 else self.model
                     model_save.save_pretrained(path_best)
                 f1_best = f1_eval
-                print('Saving best model: {}'.format(path_best))
+                print('Saving best model: {}\n'.format(path_best))
         return f1_best

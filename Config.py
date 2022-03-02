@@ -42,6 +42,7 @@ class Config(object):
         self.max_seq_length = 256                                       # 句子最长长度
         self.path_tgt_map = './dataset/'+ self.dataset +'/map.txt'      # 标签文件
         self.path_vocab = './dataset/'+ self.dataset +'/vocab.pkl'      # 词表
+        self.path_tensorboard = './logs/tensorboard/'
 
         # 多卡训练配置
         # self.init_method = 'tcp://localhost:21339'
