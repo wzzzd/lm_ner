@@ -7,7 +7,12 @@
 
 同时支持中英文的数据集的实体识别任务。
 
-若想要精度更高、推断速度更快的模型，可见另外一个项目：[LM_SPAN](https://github.com/wzzzd/lm_ner_span/blob/main/README.md)
+
+## 相关项目
+若想要精度更高、推断速度更快的NER模型，可见另外一个项目：[LM_SPAN](https://github.com/wzzzd/lm_ner_span)
+
+轻量级和基于预训练模型的文本分类框架，可见项目：[text_classifier_pytorch](https://github.com/wzzzd/text_classifier_pytorch)
+
 
 ## 支持的模型
 
