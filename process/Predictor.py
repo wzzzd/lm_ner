@@ -54,7 +54,7 @@ class Predictor(object):
         
         # 推断
         src, predict, label = self.infer()
-        tag_type= [re.sub(r'B-|I-', '', x) for x in self.id2label.values() if x!='O']
+        tag_type= [re.sub(r'B-|I-|S-|M-|E-', '', x) for x in self.id2label.values() if x!='O']
         tag_type = list(set(tag_type))
         predict = [ self.bio2token(s, pred, tag_type) for s, pred in zip(src, predict) ]
         label = [ self.bio2token(s, pred, tag_type) for s, pred in zip(src, label) ]
@@ -112,7 +112,7 @@ class Predictor(object):
         """
         将BIO标签转换成token
         """
-        tgt = [re.sub(r'B-|I-', '', x) for x in tgt]
+        tgt = [re.sub(r'B-|I-|S-|M-|E-', '', x) for x in tgt]
         list_label = []
         for c in lab_class:
             tmp_tgt = [ '_'.join([x,str(i)]) if c == x else '##' for i, x in enumerate(tgt)]

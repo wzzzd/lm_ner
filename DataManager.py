@@ -220,15 +220,15 @@ class DataManager(object):
             src = dict_data[dtype]['src']
             tgt = dict_data[dtype]['tgt']
             assert len(src) == len(tgt), "length is not equation between src and tgt."
-            # padding
-            if pad:
-                max_seq_length = self.config.max_seq_length - 2
-                src = [ [x for x in line] for line in src]
-                src = [x[:max_seq_length] if len(x) >= max_seq_length else x + [self.sign_pad]*(max_seq_length-len(x))  for x in src]
-                tgt = [x[:max_seq_length] if len(x) >= max_seq_length else x + [self.tgt2index['O']]*(max_seq_length-len(x))  for x in tgt]
             # 加上[CLS]/[SEP]字符
             src = [ [self.sign_cls]+line+[self.sign_sep] for line in src]
             tgt = [ [self.tgt2index['O']]+line+[self.tgt2index['O']] for line in tgt]
+            # padding
+            if pad:
+                max_seq_length = self.config.max_seq_length
+                src = [ [x for x in line] for line in src]
+                src = [x[:max_seq_length] if len(x) >= max_seq_length else x + [self.sign_pad]*(max_seq_length-len(x))  for x in src]
+                tgt = [x[:max_seq_length] if len(x) >= max_seq_length else x + [self.tgt2index['O']]*(max_seq_length-len(x))  for x in tgt]
             # Input转换
             src_ids = [[self.word2index(x) for x in line] for line in src]      # token转换成index
             attention_mask = [[1 if x != self.sign_pad else 0 for x in line] for line in src]           # attention matrix
